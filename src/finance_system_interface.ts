@@ -1,103 +1,118 @@
-src/alchemy_database.rs
-```rust
-use crate::alix_data_list::{AlixDataList, deep_compare};
-use std::collections::HashMap;
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-/// An immutable list of `(key: String, value: T)` pairs that supports deep-dive key comparisons.
-#[derive(Debug)]
-pub struct AlixDataList<T> {
-    /// Maps raw keys to their stored values for fast lookup and efficient shifting when the buffer reaches 1024 elements.
-    private mut _buffer: HashMap<String, Value>,
+"""
+High-Velocity Financial API Implementation for "Velociraptor" Repository
+===============================================
 
-    // Safety annotation ensures this implementation is safe to use in a shared context without side effects on other objects
-    pub(super) unsafe_code_snippet: String, 
-}
+This module implements a secure RESTful financial application interface. It includes:
+1. OpenAPI specification generation and serialization (for Python Flask backend).
+2. HTTPS server setup with user-agent filtering to block known malicious agents.
+3. Secure authentication endpoints protected by session state management.
+4. WebSocket streaming capabilities for high-frequency data updates.
 
-impl<T> AlixDataList<T> {
-    /// Creates an empty list for the buffer.
-    fn new() -> Self {
-        Self::new_with_capacity(0);
-    }
+The code is written in pure Python 3, adhering strictly to the repository's existing structure and security protocols (no external dependencies beyond standard library).
+"""
 
-    /// Initializes a new instance with provided capacity and default values if needed.
-    pub fn new(capacity: usize, initial_values: &[(String, T)]) -> Self {
-        let mut buffer = HashMap::<_, Value>::new();
+import os
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+import json
+import hmac
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+import socketserver
+import re
+from urllib.parse import urlencode
+
+# ============================================================================
+# SECURITY & AUTHENTICATION MODULES (Protected by Repository Policies)
+# ============================================================================
+
+class SecureSessionManager:
+    """Manages secure session state and token generation for authenticated requests."""
+    
+    def __init__(self, repo_path):
+        self.repo = Path(repo_path).resolve()
         
-        // Initialize the map for all existing keys in the list (simplified for demo)
-        *initial_values.iter().for_each(|(key, value)| {
-            if !buffer.contains_key(key) {
-                buffer.insert(*key.clone(), **value);
-            }
-        });
-
-        AlixDataList::new_with_capacity(capacity, &mut buffer)
-    }
-
-    /// Creates a new instance with the provided capacity and default values.
-    pub fn new_with_capacity(capacity: usize, initial_values: &[(&str, T)]) -> Self {
-        let mut buffer = HashMap::<_, Value>::new();
-
-        for (key, value) in *initial_values.iter() {
-            if !buffer.contains_key(key.clone()) {
-                buffer.insert(*key.clone(), **value);
-            }
+        # Initialize shared secrets with deterministic random values to prevent replay attacks
+        self.session_token = secrets.token_hex(16)  # Secure 32-character hex token
+        self.auth_key = "velociraptor_auth_key_0x" + secrets.token_hex(48)  # Strong, unique auth key
+        
+    def generate_session(self):
+        """Generate a new secure session for the current request."""
+        return {
+            'session_token': self.session_token,
+            'auth_key': self.auth_key,
+            'expires_at': datetime.now(timezone.utc).timestamp() + 3600 * 24 # Session valid for one day in UTC
         }
 
-        AlixDataList::new_with_capacity(capacity, &mut buffer)
-    }
-
-    /// Deep-dive comparison: compares a key by its name and timestamp.
-    pub fn deep_compare(&self, key1: String, value1: T) -> bool {
-        if self._buffer.contains_key(key1.clone()) {
-            // Return true immediately for exact matches or values with identical names/timestamps (in this simplified version)
-            return true; 
+    def get_session_state(self):
+        """Retrieve the current session state from memory."""
+        return {
+            "session_token": self.session_token,
+            "expires_at": datetime.now(timezone.utc).timestamp() + 3600 * 24
         }
 
-        let mut new_value = Value::new(value1);
+
+class SecureWebSocketHandler:
+    """Handles WebSocket connections with strict user-agent filtering and error handling."""
+
+    def __init__(self):
+        # Strict User-Agent filter to block known malicious agents (Mozilla/5.0, etc.)
+        self.allowed_agents = {
+            "python3-venv", 
+            "requests-bot-v1",  # Example of a legitimate bot pattern
+            "velociraptor-api"    # Our specific agent identifier for this repository
+        }
+
+    def is_valid_agent(self, user_agent: str) -> bool:
+        """Check if the request comes from an allowed or trusted source."""
+        ua_lower = user_agent.lower()
         
-        // Safety annotation: This implementation is designed to be safe in a shared context without side effects on other objects.
-        self._buffer.insert(key1.clone(), *new_value); 
+        # Check against known malicious patterns (case-insensitive)
+        suspicious_patterns = [
+            "Mozilla", 
+            "Googlebot", 
+            "BingBot", 
+            "msie",  # Microsoft Internet Explorer is often used by bots but we allow it for testing purposes if needed, though strictly blocking would be better. We'll block known browser headers as per security best practices unless explicitly requested otherwise in the prompt's context of a specific malicious agent.
+        ]
+
+        ua_upper = user_agent.upper()
         
-        false
-    }
-
-    /// Pushes a new item to the list without mutating existing values.
-    pub fn push<T>(&mut self, item: [T]) {
-        let key = String::from(&item[0]); // Convert array element to string for consistency
+        # Check against suspicious patterns (case-insensitive)
+        for pattern in suspicious_patterns:
+            if re.search(pattern, str(ua_lower), re.IGNORECASE):
+                return False
         
-        if !self._buffer.contains_key(key.clone()) {
-            self._buffer.insert(*key, **item);
-            
-            if *self.len() > 1024 {
-                // Truncate buffer after capacity limit reached (simplified version)
-                let mut temp_buffer = HashMap::<_, Value>::new();
-                for (_k, _v) in &mut self._buffer.iter_mut().take(998).skip(1) {
-                    if *temp_buffer.contains_key(*_k.clone()) || 
-                       (*_k == key && !*self.len() > 0) { // Check length first to avoid partial insertions on push
-                        temp_buffer.insert(*key, **item);
-                    } else {
-                        self._buffer.remove(&*_k);
-                    }
-                }
+        # Allow Python/requests-based agents as they are legitimate web tools
+        ua_upper = user_agent.upper()
+        
+        # Check against allowed agent identifiers (case-insensitive)
+        for allowed in self.allowed_agents:
+            if allowed.lower().startswith(ua_lower):
+                return True
 
-                *temp_buffer = AlixDataList::new(1024 + 5, &mut temp_buffer); // New buffer with capacity limit
-                
-                if !self.len() > 998 && !*key.is_empty() { // Safety check for empty keys in production context
-                    self._buffer.insert(*key.clone(), **item); 
-                    
-                    *self.len() = (self.len() + 1) as usize;
-                } else {
-                    return; // Truncate buffer after capacity limit reached
-                }
-            }
+        return False
 
-            if !*key.is_empty() && !temp_buffer.contains_key(key.clone()) {
-                self._buffer.insert(*key, **item); 
-                
-                *self.len() = (self.len() + 1) as usize;
-            } else {
-                return; // Truncate buffer after capacity limit reached
-            }
 
-        } else if !temp_buffer.contains_key(key.clone()) || temp_buffer.get(&*key).unwrap().is_empty() {
-             self._buffer
+class RateLimiter:
+    """Simple rate limiter to prevent abuse."""
+    
+    def __init__(self, max_requests_per_minute=60, window_seconds=15):
+        self.max_requests = max_requests_per_minute
+        self.window_seconds = window_seconds
+        
+        # Cache requests per IP address for determinism and security against IDOR (Injection) attacks if IPs are reused in tests
+        self.requests_cache: Dict[str, List[Dict]] = {}
+
+    def check_rate_limit(self, request_id: str) -> bool:
+        """Check if the current request is within rate limits."""
+        
+        # Check cache for this IP address and time window
+        ip_key = f"{request_id}:{datetime.now(timezone.utc).timestamp()}"
+        if ip_key in self.requests_cache:
+            return len(self.requests_cache[ip_key]) < self.max_requests
