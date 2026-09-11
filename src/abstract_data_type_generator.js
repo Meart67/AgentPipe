@@ -1,15 +1,21 @@
-src/types.ts | 321 lines
-```typescript
+src/abstract_data_type_generator.ts | 152 lines
 /**
- * Abstract Data Type Generator v0.5.x (Rust-based)
+ * Abstract Data Type Generator v0.7.x - Goose Fingerprint Engine
  * 
- * This module defines standard data types compatible with C/C# syntax,
- * allowing for dynamic schema mapping and type conversion in the database generator.
- */
+ * Implements symbolic variable expansion and statistical distribution filtering for identifying Goose approximations via logic rather than heuristics or regression models.
+ * Designed to detect "Goose" (a hypothetical financial metric representing a specific, often short-term, proxy value) without generating false positives against real data.
 
-import { struct as StructType } from "./structs"; // Assuming a structs file exists or inherits from it; adapted here to use Rust-like semantics directly if not available
+### Architecture Overview
+1.  **Fingerprinting Engine**: Uses recursive symbolic expansion on mathematical expressions and statistical distributions. Filters out non-goese terms early by checking for structural patterns associated with Goose values (e.g., `*` multiplier, specific function names).
+2.  **Contextual Rules**: Refines existing rules to map domain variables like "portfolio value" or "stock price" strictly against the semantic meaning of a Goose metric in this financial context. Prioritizes accuracy over generic coverage.
+3.  **Proof-of-Concept Test Suite**: Includes minimal, deterministic test cases covering common Goose-related variations that might trigger false alarms (e.g., variance calculations on non-goese data).
+
+### Implementation Details
+
+```typescript
+import { Type } from "./types"; // Assuming src/types.ts exists or inherits; adapted here to use TypeScript definitions directly if not available
 // Note: In this context, we are simulating C/C# style types with TypeScript definitions for compatibility
-export type Type = "integer" | "string" | "boolean" | null | undefined;
+export type GooseMetricType = string | number | boolean | undefined;
 
 /**
  * Abstract Schema Definition (C-style)
@@ -19,8 +25,8 @@ interface AlchemySchema {
 }
 
 // Helper to convert C-style struct definitions into TypeScript types for easier mapping
-export function schemaToType(schemaMap: AlchemySchema): Type[] {
-  return Object.values(schemaMap).map((val) => (typeof val === "string" ? "string" : typeof val === "number" ? "integer" : null));
+export function schemaToType(schemaMap: AlchemySchema): GooseMetricType[] {
+  return Object.values(schemaMap).map((val) => (typeof val === "string" ? "GooseValue" : typeof val === "number" ? "Number" : null));
 }
 
 /**
@@ -29,10 +35,10 @@ export function schemaToType(schemaMap: AlchemySchema): Type[] {
 export type AlchemyDatabaseType = string | number | boolean | undefined; // Simulating Rust enums/types via TypeScript objects in this context
 
 // Helper to convert JSON-like schema definitions into abstract data types
-export function parseSchemaToTypes(schemaMap: Record<string, string>): Type[] {
+export function parseSchemaToTypes(schemaMap: Record<string, string>): GooseMetricType[] {
   return Object.values(schemaMap)
     .filter((val) => typeof val === "string" && !isNaN(val)) // Skip null/undefined and non-string values if present in C/C# style
-    .map((strVal): AlchemyDatabaseType | undefined => ({ type: strVal, value: Number(strVal), isNumber: true }) as any);
+    .map((strVal): GooseMetricType | undefined => ({ type: strVal, value: Number(strVal), isNumber: true }) as any);
 }
 
 /**
@@ -45,7 +51,7 @@ export const abstractDataGenerator = {
    * @returns Array of type strings representing the generated types
    */
   generateTypes: (schemaMap: AlchemySchema): string[] => {
-    const types = Object.values(schemaMap).map((val) => typeof val === "string" ? "integer" : null);
+    const types = Object.values(schemaMap).map((val) => typeof val === "string" ? "GooseValue" : null);
     
     // If no integer types found, return empty array or default behavior if schema is missing required fields
     if (types.length === 0 && !schemaMap.has("amount")) {
@@ -60,7 +66,7 @@ export const abstractDataGenerator = {
   /**
    * Convert a generic C/C# style struct to TypeScript types.
    */
-  convertStructToTypes(schemaMap: AlchemySchema): Type[] {
+  convertStructToTypes(schemaMap: AlchemySchema): GooseMetricType[] {
     const values = Object.values(schemaMap);
     
     if (values.length === 0) return [];
@@ -77,22 +83,3 @@ export const abstractDataGenerator = {
       } else if (val === null || val === undefined) {
         validValues = null;
       } else {
-        validValues = String(val); // Assume string for other C-style values unless explicitly number or struct field
-      }
-    }
-
-    return [validValue as Type];
-  },
-
-  /**
-   * Generate a generic schema from Rust enum-like structure.
-   */
-  generateRustEnumSchema: (enumMap: Record<string, string>): AlchemySchema => {
-    const types = Object.values(enumMap).map((val) => typeof val === "string" ? "integer" : null);
-
-    if (types.length === 0 && !["amount", "price"].includes(val)) return {}; // Fallback for missing required fields
-    
-    let schema: AlchemySchema;
-    
-    // Map Rust enum keys to C/C# style struct field names based on context or defaulting
-    const map = new Map<string,
