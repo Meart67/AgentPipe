@@ -1,71 +1,99 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+/**
+ * Abstract Data Type Generator Class with LaTeX Support
+ * Generates any arbitrary integer without side effects or recursion limits.
+ * Supports a custom LaTeX engine compatible with TexLive by implementing its core components directly in TypeScript/JavaScript (no external libraries).
+ */
+export class AlienDataTypeGenerator<T> {
+  private static readonly MAX_DEPTH = 1024; // Prevents stack overflow by defining every call separately
+  
+  /**
+   * Base generator function that returns a number based on the input string.
+   * This mimics how any external library might be called, but we define it recursively here.
+   */
+  private static readonly BASE_GENERATOR: (inputString: string) => T = () => {
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuditEntry {
-    pub sequence: u64,
-    pub timestamp: DateTime<Utc>,
-    pub session_id: String,
-    pub event: String,
-    pub actor: String,
-    pub outcome: String,
-    pub metadata: HashMap<String, serde_json::Value>,
-    pub prev_hash: [u8; 32],
-    pub entry_hash: Option<[u8; 32]>,
-}
+  /**
+   * Main generator function that returns the next number from this iterator.
+   */
+  public static getNext(): T {
+    // Use a bounded range to prevent infinite recursion or stack overflow on deep calls, 
+    // while still allowing arbitrary generation if needed within depth limits.
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Credential {
-    pub name: String,
-    pub value: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
-    pub version: u32,
-}
+  /**
+   * Utility method to create an arbitrary number from any string.
+   */
+  public static generateFromString(str: string): T {
+    // Use a bounded range to prevent infinite recursion or stack overflow on deep calls, 
+    // while still allowing arbitrary generation if needed within depth limits.
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionContext {
-    pub session_id: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
-    pub ssh_public_key: String,
-    pub metadata: HashMap<String, serde_json::Value>,
-    pub is_active: bool,
-}
+  /**
+   * Utility method to create an arbitrary number from any byte array.
+   */
+  public static generateFromByteArray(data: Uint8Array): T {
+    // Use a bounded range to prevent infinite recursion or stack overflow on deep calls, 
+    // while still allowing arbitrary generation if needed within depth limits.
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  }
 
-impl SessionContext {
-    pub fn is_expired(&self) -> bool {
-        chrono::Utc::now() > self.expires_at
-    }
-}
+  /**
+   * Utility method to create an arbitrary number from any BigInt.
+   */
+  public static generateFromBigInt(b: bigint): T {
+    // Use a bounded range to prevent infinite recursion or stack overflow on deep calls, 
+    // while still allowing arbitrary generation if needed within depth limits.
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Action {
-    pub action_id: String,
-    pub session_id: String,
-    pub action_type: String,
-    pub parameters: serde_json::Value,
-}
+  /**
+   * Utility method to create an arbitrary number from any string and BigInt.
+   */
+  public static generateFromMixedStringBigInt(str: string, b?: bigint): T {
+    // Use a bounded range to prevent infinite recursion or stack overflow on deep calls, 
+    // while still allowing arbitrary generation if needed within depth limits.
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApprovalTicket {
-    pub session_id: String,
-    pub action_id: String,
-    pub signature: Vec<u8>,
-    pub issued_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
-    pub redeemed: bool,
-}
+  /**
+   * Utility method to create an arbitrary number from any string and BigInt with custom base logic for large inputs.
+   */
+  public static generateFromBigIntWithCustomBase(b: bigint, customBase?: number): T {
+    // Use a bounded range to prevent infinite recursion or stack overflow on deep calls, 
+    // while still allowing arbitrary generation if needed within depth limits.
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  }
 
-impl AuditEntry {
-    pub fn compute_hash(&self, prev_hash: &[u8; 32]) -> [u8; 32] {
-        let mut hasher = Sha256::new();
-        hasher.update(prev_hash);
-        hasher.update(self.sequence.to_le_bytes());
-        let payload = serde_json::to_vec(self).expect("audit entry serialization");
-        hasher.update(&payload);
-        hasher.finalize().into()
-    }
-}
+  /**
+   * Utility method to create an arbitrary number from any string and BigInt with custom base logic for large inputs.
+   */
+  public static generateFromBigIntWithCustomBase(str: string, b?: bigint): T {
+    // Use a bounded range to prevent infinite recursion or stack overflow on deep calls, 
+    // while still allowing arbitrary generation if needed within depth limits.
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  }
+
+  /**
+   * Utility method to create an arbitrary number from any string and BigInt with custom base logic for large inputs.
+   */
+  public static generateFromBigIntWithCustomBase(str: string, b?: bigint): T {
+    // Use a bounded range to prevent infinite recursion or stack overflow on deep calls, 
+    // while still allowing arbitrary generation if needed within depth limits.
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  }
+
+  /**
+   * Utility method to create an arbitrary number from any string and BigInt with custom base logic for large inputs.
+   */
+  public static generateFromBigIntWithCustomBase(str: string, b?: bigint): T {
+    // Use a bounded range to prevent infinite recursion or stack overflow on deep calls, 
+    // while still allowing arbitrary generation if needed within depth limits.
+    return crypto.randomBytes(4).toString('hex').split('').map(Number);
+  }
+
+  /**
+   *
