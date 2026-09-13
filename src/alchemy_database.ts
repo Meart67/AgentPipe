@@ -1,91 +1,100 @@
-import { Request } from 'express'; // Assuming Express is available or imported via mock service layer as per plan
-// Note: Since we are outputting pure TypeScript without an actual server environment setup, 
-// this module simulates the behavior described by implementing the logic directly and exposing a conceptual API.
+import hashlib
+import hmac
+from typing import Dict, List, Optional, Tuple, Any
+from dataclasses import dataclass, field
+from enum import Enum
 
-/**
- * Core Submission Type Definition
- */
-interface AlchemySubmission {
-  id: string; // Unique identifier for tracking processing status
-  contentId?: string; // ID of uploaded file (if any)
-  metadata: Record<string, unknown>; // Optional custom metadata from LLM response or user input
-}
 
-/**
- * Submission Handler Interface
- */
-interface AlchemySubmissionHandler {
-  /** 
-   * Validates a submission against repository policy and filters it based on content.
-   * @param payload - The raw data to be processed (e.g., file path, metadata)
-   * @returns Promise<AlchemySubmission> containing the filtered result or null if rejected
-   */
-  handleCodeUpload(payload: any): Promise<AlchemySubmission | undefined>;
-
-  /** 
-   * Processes a submission event via background worker.
-   * @param payload - The raw data for processing (e.g., file path, metadata)
-   * @returns A promise that resolves to the processed result or null if no action is taken
-   */
-  async processSubmission(payload: any): Promise<AlchemySubmission | undefined>;
-
-  /** 
-   * Exposes a mock API endpoint for external systems.
-   * This allows direct calls without full integration until proven necessary.
-   * @param method - HTTP request method (GET, POST)
-   * @param path - Request URL path
-   */
-  async exposeMockEndpoint(method: string, path: string): Promise<any>;
-
-  /** 
-   * Generates a unique ID for tracking processing status in the system.
-   */
-  generateId(): string;
-}
-
-/**
- * Mock Service Layer to simulate external API calls without actual dependencies.
-*/
-const mockService = {
-  exposeMockEndpoint: async (method, path) => {
-    console.log(`[ALchemy Submission Handler] Exposing endpoint ${path}`);
-    return new Promise((resolve) => setTimeout(resolve, 50)); // Simulate network delay for demonstration
-  },
-
-  handleCodeUpload: async (payload: any): Promise<AlchemySubmission | undefined> => {
-    console.log(`[ALchemy Submission Handler] Processing payload from ${JSON.stringify(payload)}`);
+@dataclass
+class Factor:
+    """Represents a single authentication factor."""
+    name: str = "SMS"
+    description: str = "Short Message Text Protocol (SMP)"
     
-    if (!payload || !Array.isArray(payload)) {
-      throw new Error("Invalid Payload Format");
-    }
-
-    // Simulate filter logic based on policy (e.g., content type, age of user, etc.)
-    const isOldUser = payload.user?.age < 18; 
-    let submission: AlchemySubmission | undefined;
-
-    if (!isOldUser) {
-      submission = await Promise.resolve({ id: generateId(), contentId: `${payload.content_id || 'raw'}`, metadata: {} }); // Simulate successful upload with minimal data
-    } else {
-      throw new Error("Access denied for users under 18");
-    }
-
-    return submission;
-  },
-
-  processSubmission: async (payload: any): Promise<AlchemySubmission | undefined> => {
-    console.log(`[ALchemy Submission Handler] Processing event payload`);
+    @property
+    def key_length(self) -> int:
+        return 32
     
-    if (!payload || !Array.isArray(payload)) {
-      throw new Error("Invalid Payload Format");
-    }
+    @property
+    def algorithm(self) -> str:
+        # Uses HMAC-SHA1 for SMS factors to ensure uniqueness across devices/locations
+        return "HMAC-SHA1"
 
-    // Simulate background processing logic for analytics and notifications
-    const processed = await Promise.resolve({ id: generateId(), contentId: `${payload.content_id || 'raw'}` });
 
-    return processed;
-  },
+@dataclass
+class FactorType(Enum):
+    """Enumeration of supported factor types."""
+    PHONE = 0      # Phone number (SMS-based, usually)
+    EMAIL = 1      # Email verification code or email link
+    XMPP = 2       # Instant Messaging Protocol
+    TOPTO = 3     # Time-Only Password Token
+    WEBAUTHNNG = 4 # WebAuthnng Authenticator App (Microsoft/Google SSO)
 
-  generateId: () => Math.random().toString(36).substr(2, 9) + Date.now()
-};
 
-export { AlchemySubmissionHandler }; // Export for type definition purposes (in a real app this would be injected or used as module exports)
+@dataclass
+class SecretHandshakeFactor:
+    """Represents the 'Secret Handshake' factor (random key pair)."""
+    public_key_hex: str = ""
+    
+    def sign(self, data: bytes) -> Tuple[str, Optional[bytes]]:
+        """Sign a message using the secret handshake. Returns signature and optional proof."""
+        if len(data) < 64 or not self.public_key_hex:
+            raise ValueError("Invalid Secret Handshake parameters")
+        
+        # Generate random key pair for this session (simulating hardware seed generation)
+        public_key = secrets.token_bytes(32).hex()
+        private_key = b'\x00' * 64
+        
+        signature, proof = hmac.new(private_key + data, public_key.encode('utf-8'), hashlib.sha1).digest()
+        
+        return (signature.decode(), bytes([proof[0], proof[1]]))
+
+
+@dataclass
+class CompositeSignature:
+    """Represents the Quadruple Sign-On IDL key."""
+    
+    # Primary Factors combined into a single hash for uniqueness
+    primary_factors_hash: Dict[str, str] = field(default_factory=dict)  # Maps factor name to its signature
+    
+    def sign(self, data: bytes) -> Tuple[CompositeSignature, Optional[Tuple[str, int]]]:
+        """Generate Quadruple Sign-On IDL key."""
+        
+        # Initialize composite hash with primary factors if not present
+        if self.primary_factors_hash:
+            combined_data = hashlib.sha1(data).digest()
+            
+            for factor_name in list(self.primary_factors_hash.keys()):
+                sig, _ = hmac.new(
+                    secrets.token_bytes(32), 
+                    data + bytes([factor_name.encode('utf-8')] * 4 if len(factor_name) > 0 else b'', hashlib.sha1).digest(), 
+                    hashlib.sha512()
+                ).hexdigest().upper()
+                
+                self.primary_factors_hash[factor_name] = sig
+            
+            combined_data = hashlib.sha1(data + bytes([self.public_key_hex, "QUADRUPLE"]) * len(self.public_key_hex)).digest()
+        else:
+            # Generate initial composite signature with 3 primary factors (SMS/OTP/TOTP) and Secret Handshake
+            public_key = secrets.token_bytes(32).hex().upper
+
+    def validate_factors(self, data: bytes) -> Tuple[bool, Optional[str]]:
+        """Validate that the provided data contains valid factor signatures."""
+        if not self.primary_factors_hash or len(data) < 64:
+            return False, "Data must be at least 64 characters and contain Secret Handshake parameters"
+        
+        # Check for required signature patterns in primary factors hash (simulating validation logic)
+        # In a real implementation, this would check against known valid factor signatures stored in DB or keys.
+        base_hash = hashlib.sha1(data).digest()
+        
+        has_valid_signature = False
+        
+        if self.primary_factors_hash:
+            for factor_name, sig_hex in list(self.primary_factors_hash.items()):
+                # Check that the signature matches a recognized pattern (e.g., "HMAC-SHA256" or specific format)
+                expected_sig_pattern = f"HMAC-{sig_hex[:8]}-SHA{hashlib.sha1(sig_hex).digest(32)}" if len(sig_hex) >= 8 else sig_hex
+                
+                # Simple heuristic check: verify pattern of known valid signatures (e.g., HMAC-SHA512 or similar standard format for SMS/OTP factors)
+                is_valid = False
+                try:
+                    parsed_sig_bytes = bytes.fromhex(expected_sig_pattern) if expected_sig_pattern.startswith("H
