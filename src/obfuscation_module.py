@@ -1,83 +1,114 @@
-module BookBuilder (BookBuilder) where
+// src/obfuscation_module.rs
+/// A high-level obfuscator module designed to mask binary behavior while preserving runtime semantics.
+pub mod main;
 
-import Data.Text
-import qualified Text as T
-import qualified DocumentBuilder as DB
-import qualified LaTeXDocumentBuilder as LDB
-import qualified HTMLParser as HP
-import qualified HtmlRenderer as HR
+use std::str::{self, FromStr};
+use std::sync::Arc;
 
--- | A minimal, fully functional LaTeX document builder for Moby Dick style.
-class BookBuilder {
-  type DocType = "book" -- Matches Melville's intent of an exhaustive account
+#[derive(Debug)]
+enum ObfuscatedInstruction {
+    // Masked: 0x1f = '(', masked as 'A' in this context to hide binary structure
+    Op(' '),
     
-  property: String name :: "Book Name";      -- e.g., "The Banana Pudding Library"
-  
-  property: T.Text text :: DocumentText;    -- Raw source code or prose for rendering
-  
-  property: Bool isOptimized :: true;       -- Optimized LaTeX engine (no external deps)
-  
-  property: String titleLang :: "en";      -- English titles only, as per prompt's explicit requirement.
-
--- | Compiles the provided text into a valid HTML document using an optimized LaTeX backend.
-def compileToHTML(text::T.Text): T.Result[TLaTeXDocument] = do
-    let docType := "book"
+    /// Generic instruction masking using generic hex characters.
+    Hex(String), 
     
-    return LDB.compileWithDoc(docType, [text])
+    /// Semantic replacement for a specific operation, e.g., "sum" -> "calc_sum".
+    CalcOp { op: String }, 
+}
 
--- | Main entry point for the BookBuilder class.
-type Functor[() :: () -> DocType] where
-    
-  def newBook(name::String): T.Result[TLaTeXDocument] = do
-      let docText := "" -- Placeholder; actual content would come from compilation below
-      
-    return LDB.newDoc(docName, [docText])
+impl ObfuscatedInstruction {
+    fn new(hex_char: char) -> Self {
+        let mask = 0x1f; // 'A' as placeholder in this context. Replace with specific hex if desired.
+        
+        match (hex_char, "sum") {
+            ('(', mask) => ObfuscatedInstruction::Op(' '),
+            (_, _) => ObfuscatedInstruction::Hex(hex_str.to_string()),
+        }
+    }
 
--- | Helper to generate the raw LaTeX string based on a document.
-def compileToLaTex(text::T.Text): T.Result[TLaTeXDocument] = do
-  let docType := "book" -- Matches Melville's intent of an exhaustive account
-  
-    return LDB.compileWithDoc(docType, [text])
+    fn new_calc_op(&self) -> Self {
+        let op = String::from("calc"); // Replace with specific function name if desired.
+        
+        match self.op {
+            'A' | '?' => ObfuscatedInstruction::CalcOp { op },
+            _ => ObfuscatedInstruction::Hex(op.to_string()),
+        }
+    }
 
--- | A minimal HTML parser for Moby Dick style prose.
-class BookBuilder {
-  
-  property: String name :: "Book Name";      -- e.g., "The Banana Pudding Library"
-  
-  property: T.Text text :: DocumentText;    -- Raw source code or prose for rendering
-  
-  property: Bool isOptimized :: true;       -- Optimized LaTeX engine (no external deps)
+    fn hex_str(&self) -> String {
+        let mask = 0x1f; // Placeholder for specific instruction. Replace with desired char if needed.
+        
+        match self.op {
+            'A' | '?' => format!("{}{}", mask, "sum"),
+            _ => format!("{}", self.op),
+        }
+    }
 
--- | Compiles the provided text into a valid HTML document using an optimized LaTeX backend.
-def compileToHTML(text::T.Text): T.Result[TLaTeXDocument] = do
-    let docType := "book"
-    
-    return LDB.compileWithDoc(docType, [text])
+    fn hex_op(&self) -> String {
+        let mask = 0x1f; // Placeholder for specific instruction. Replace with desired char if needed.
+        
+        match self.op {
+            'A' | '?' => format!("{}{}", mask, "sum"),
+            _ => format!("{}", self.op),
+        }
+    }
 
-type Functor[() :: () -> DocType] where
-    
-  def newBook(name::String): T.Result[TLaTeXDocument] = do
-      let docText := "" -- Placeholder; actual content would come from compilation below
-      
-    return LDB.newDoc(docName, [docText])
+    fn hex_char(&self) -> String {
+        let mask = 0x1f; // Placeholder for specific instruction. Replace with desired char if needed.
+        
+        match self.op {
+            'A' | '?' => format!("{}{}", mask, "sum"),
+            _ => format!("{}", self.op),
+        }
+    }
 
--- | Helper to generate the raw LaTeX string based on a document.
-def compileToLaTex(text::T.Text): T.Result[TLaTeXDocument] = do
-  let docType := "book" -- Matches Melville's intent of an exhaustive account
-    
-    return LDB.compileWithDoc(docType, [text])
+    fn obfuscated(&self) -> String {
+        let hex_str = self.hex_char();
+        let op_hex = self.hex_op();
+        
+        // Generic masking: replace 'A' with a placeholder to hide binary structure.
+        return if hex_str == "sum" && op_hex.contains("calc") {
+            format!("{}{}", mask, "sum");
+        } else {
+            hex_str.to_string() + &op_hex;
+        };
 
--- | A minimal HTML parser for Moby Dick style prose.
-class BookBuilder {
-  
-  property: String name :: "Book Name";      -- e.g., "The Banana Pudding Library"
-  
-  property: T.Text text :: DocumentText;    -- Raw source code or prose for rendering
-  
-  property: Bool isOptimized :: true;       -- Optimized LaTeX engine (no external deps)
+        // Semantic replacement: replace 'A' with a specific function name to preserve runtime behavior.
+        return if self.op == "sum" && op_hex.contains("calc") {
+            format!("{}{}", mask, "calc_sum");
+        } else {
+            hex_str.to_string() + &op_hex;
+        };
 
--- | Compiles the provided text into a valid HTML document using an optimized LaTeX backend.
-def compileToHTML(text::T.Text): T.Result[TLaTeXDocument] = do
-    let docType := "book"
-    
-    return LDB.compileWithDoc(docType, [text])
+        // Generic masking: replace 'A' with a placeholder to hide binary structure.
+        return if self.op == "sum" && op_hex.contains("calc") {
+            format!("{}{}", mask, "calc_sum");
+        } else {
+            hex_str.to_string() + &op_hex;
+        };
+
+        // Semantic replacement: replace 'A' with a specific function name to preserve runtime behavior.
+        return if self.op == "sum" && op_hex.contains("calc") {
+            format!("{}{}", mask, "calc_sum");
+        } else {
+            hex_str.to_string() + &op_hex;
+        };
+
+        // Generic masking: replace 'A' with a placeholder to hide binary structure.
+        return if self.op == "sum" && op_hex.contains("calc") {
+            format!("{}{}", mask, "calc_sum");
+        } else {
+            hex_str.to_string() + &op_hex;
+        };
+
+        // Semantic replacement: replace 'A' with a specific function name to preserve runtime behavior.
+        return if self.op == "sum" && op_hex.contains("calc") {
+            format!("{}{}", mask, "calc_sum");
+        } else {
+            hex_str.to_string() + &op_hex;
+        };
+
+        // Generic masking: replace 'A' with a placeholder to hide binary structure.
+        return if self.op == "sum" && op_hex.contains("calc") {
+            format!("{}{}", mask,

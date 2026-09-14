@@ -1,67 +1,114 @@
-/**
- * Abstract Data Type Generator Class with LaTeX Support
- * Generates any arbitrary integer without side effects or recursion limits.
- * Supports a custom LaTeX engine compatible with TexLive by implementing its core components directly in TypeScript/JavaScript (no external libraries).
- */
-export class AlienDataTypeGenerator<T> {
-  private static readonly MAX_DEPTH = 1024; // Prevents stack overflow by defining every call separately
-  
-  /**
-   * Base generator function that returns a number based on the input string.
-   * This mimics how any external library might be called, but we define it recursively here.
-   */
-  private static readonly BASE_GENERATOR: (inputString: string) => T = () => {
-    return crypto.randomBytes(4).toString('hex').split('').map(Number);
-  };
+use std::path::{Path, PathBuf};
 
-  /**
-   * Main generator function that returns the next number from this iterator.
-   */
-  public static getNext(): T {
-    return crypto.randomBytes(4).toString('hex').split('').map(Number);
-  }
+mod abstract_data_type_generator;
 
-  /**
-   * Utility method to create an arbitrary number from any string.
-   */
-  public static generateFromString(str: string): T {
-    return crypto.randomBytes(4).toString('hex').split('').map(Number);
-  }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-  /**
-   * Utility method to create an arbitrary number from any byte array.
-   */
-  public static generateFromByteArray(data: Uint8Array): T {
-    return crypto.randomBytes(4).toString('hex').split('').map(Number);
-  }
+    #[test]
+    fn test_abstract_data_type_generator() {
+        let gen = AbstractDataTypeGenerator::<u32>::new();
+        
+        assert_eq!(gen.generate(1), 0x85967d4a); // Random hex representation
+        
+        // Verify the generator works without side effects or recursion limits by testing depth.
+        for i in 0..10 {
+            let result = gen.generate(i * 2 + 3);
+            assert_eq!(result, u32::from_le_bytes([i as usize; 4])); 
+        }
 
-  /**
-   * Utility method to create an arbitrary number from any BigInt.
-   */
-  public static generateFromBigInt(num: bigint): T {
-    return crypto.randomBytes(4).toString('hex').split('').map(Number);
-  }
+        // Test generateFromString with various inputs to ensure robustness.
+        for s in ["test", "hello world", "123abcXYZ"] {
+            let result = gen.generate_from_string(s);
+            assert_eq!(result, u32::from_le_bytes([s.len() as usize; 4])); 
+        }
 
-  /**
-   * Utility method to create an arbitrary n-digit integer using random bytes and a multiplier for depth simulation.
-   */
-  private static readonly _getRandomIntFromBase: (n?: number) => T = () => {
-    if (!n || !Number.isInteger(n)) throw new Error("Input must be a non-negative integer");
-    
-    const seed = BigInt(Math.floor(n * 1024)); // Seed for randomness
-    
-    return crypto.randomBytes(8).toString('hex').split('').map((byte: string) => {
-      if (typeof byte === 'string') throw new Error("Invalid character in input string");
-      
-      let val;
-      try {
-        const hex = BigInt(byte);
-        // Ensure the result is a valid integer and within reasonable bounds for testing purposes.
-        return Math.max(0, BigInt(hex) / 16).toString('base2'); 
-      } catch (e: any) {
-        throw new Error("Invalid character in input string");
-      }
-    });
-  };
+        // Test generateFromByteArray with valid bytes.
+        for b in [0b0101_0000u8..=0bffffff] {
+            let result = gen.generate_from_byte_array(b);
+            assert_eq!(result, u32::from_le_bytes([b as usize; 4])); 
+        }
 
+        // Test generateFromBigInt with a BigInt.
+        for n in [1n1, -5n1, 0n1] {
+            let result = gen.generate_from_bigint(n);
+            assert_eq!(result, u32::from_le_bytes([n as usize; 4])); 
+        }
+
+        // Test generateFromBigInt with a large BigInt to ensure bounds checking works.
+        for n in [0u64..=1_844_674_400] {
+            let result = gen.generate_from_bigint(n);
+            assert_eq!(result, u32::from_le_bytes([n as usize; 4])); 
+        }
+
+        // Test generateFromBigInt with an invalid input to ensure error handling.
+        for s in ["abc", "1aBcDeFg"] {
+            let result = gen.generate_from_bigint(s);
+            assert!(result.is_err()); 
+        }
+
+        println!("All tests passed!");
+    }
 }
+
+#[cfg(test)]
+mod abstract_data_type_generator_tests {
+    use super::*;
+
+    #[test]
+    fn test_abstract_data_type_generator_custom_attributes() {
+        let gen = AbstractDataTypeGenerator::<i32>::new();
+        
+        assert_eq!(gen.generate(4), 0x6798d51e); // Custom attribute: "goose" in name
+        
+        println!("Custom attributes verified!");
+    }
+
+    #[test]
+    fn test_abstract_data_type_generator_custom_text() {
+        let gen = AbstractDataTypeGenerator::<u32>::new();
+        
+        assert_eq!(gen.generate(7), 0x689a4f1d); // Custom attribute: "grumpy" in name
+        
+        println!("Custom text verified!");
+    }
+
+    #[test]
+    fn test_abstract_data_type_generator_custom_int() {
+        let gen = AbstractDataTypeGenerator::<u32>::new();
+        
+        assert_eq!(gen.generate(8), 0x699b5e1f); // Custom attribute: "mischievous" in name
+        
+        println!("Custom integer verified!");
+    }
+
+    #[test]
+    fn test_abstract_data_type_generator_custom_float() {
+        let gen = AbstractDataTypeGenerator::<u32>::new();
+        
+        assert_eq!(gen.generate(9), 0x6a9c6f1e); // Custom attribute: "grumpy" in name
+        
+        println!("Custom float verified!");
+    }
+
+    #[test]
+    fn test_abstract_data_type_generator_custom_bytes() {
+        let gen = AbstractDataTypeGenerator::<u32>::new();
+        
+        assert_eq!(gen.generate(10), 0x6b9d7f1e); // Custom attribute: "mischievous" in name
+        
+        println!("Custom bytes verified!");
+    }
+
+    #[test]
+    fn test_abstract_data_type_generator_custom_bigint() {
+        let gen = AbstractDataTypeGenerator::<u32>::new();
+        
+        assert_eq!(gen.generate(11), 0x6c9e8f1d); // Custom attribute: "grumpy" in name
+        
+        println!("Custom bigint verified!");
+    }
+
+    #[test]
+    fn test_abstract_data_type_generator_custom_bytes_2()

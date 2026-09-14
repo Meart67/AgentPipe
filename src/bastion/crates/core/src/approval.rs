@@ -1,171 +1,114 @@
-use hmac::{Hmac, Mac};
-use parking_lot::RwLock;
-use sha2::Sha256;
+use crate::audit::{AuditChain, AuditEntry};
+use crate::core::components::*;
+use crate::types::ApprovalTicket as AppTkt;
 use std::collections::HashMap;
+use std::rc::Rc;
+use chrono::{DateTime, Utc};
 
-use crate::types::ApprovalTicket;
-use crate::{audit::AuditChain, vault::Vault, Result};
+// Type definitions for the C/C# types (converted to Rust)
+#[derive(Debug)]
+struct Amount {
+    value: f64, // F64 is used as a common float type in financial systems
+}
 
-type HmacSha256 = Hmac<Sha256>;
+impl PartialEq<Amount> for ApprovalTicket {
+    fn eq(&self, other: &ApprovalTicket) -> bool {
+        self.data.0 == other.data.0 && self.data.1 == other.data.1
+    }
+}
+
+// Custom TryFrom implementation to map schema keys back into Rust structs
+impl From<Amount> for ApprovalTicket {
+    type Error = AlchemyDatabaseError;
+
+    fn from(amount: Amount) -> Result<Self, Self::Error> {
+        Ok(ApprovalTicket {
+            id: String::from("txn_001"), // Placeholder ID based on schema key "amount"
+            data: (String::from("session_abc"), String::from("action_xyz")),
+            issued_at: Utc::now(),
+        })
+    }
+
+    fn from_str(s: &str) -> Result<Self, Self::Error> {
+        let parts: Vec<&str> = s.split_whitespace().collect();
+        if parts.len() != 2 || parts[0] == "session" || parts[1] == "action" {
+            return Err(AlchemyDatabaseError::TypeMismatch("Unknown Column")); // Fallback for unknown columns
+        }
+
+        let session_id: String = parts[0].to_string();
+        let action_id: String = parts[1].to_string();
+
+        Ok(ApprovalTicket {
+            id: "txn_002".to_string(),
+            data: (session_id, action_id),
+            issued_at: Utc::now(),
+        })
+    }
+}
+
+// Helper to create a default struct for unknown columns if one doesn't exist in the schema
+#[derive(Debug)]
+struct DefaultApprovalTicket {
+    id: String,
+    data: (String, String), // SessionID + ActionID
+    issued_at: DateTime<Utc>,
+}
 
 impl ApprovalTicket {
     fn is_expired(&self) -> bool {
-        chrono::Utc::now() > self.expires_at
+        Utc::now() > self.expires_at
     }
-}
-
-pub struct ApprovalBroker {
-    vault: std::sync::Arc<Vault>,
-    audit: std::sync::Arc<AuditChain>,
-    ticket_ttl: std::time::Duration,
-    max_pending: usize,
-    tickets: RwLock<HashMap<String, ApprovalTicket>>,
-}
-
-impl ApprovalBroker {
-    pub fn new(
-        vault: std::sync::Arc<Vault>,
-        audit: std::sync::Arc<AuditChain>,
-        ticket_ttl: std::time::Duration,
-        max_pending: usize,
+    
+    /// Creates a new default ticket with the given session and action if no explicit data was provided.
+    pub fn create_default(
+        &mut self, 
+        _session_id: String, 
+        _action_id: String,
+        expires_at: Option<DateTime<Utc>> = None // Default to now for non-expired tickets
     ) -> Self {
-        Self {
-            vault,
-            audit,
-            ticket_ttl,
-            max_pending,
-            tickets: RwLock::new(HashMap::new()),
-        }
-    }
-
-    fn signing_key(&self) -> String {
-        self.vault
-            .get_credential("approval:broker:hmac")
-            .expect("vault operational")
-    }
-
-    pub fn issue_ticket(&self, session_id: &str, action_id: &str) -> Result<ApprovalTicket> {
-        let mut tickets = self.tickets.write();
-        if tickets.len() >= self.max_pending {
-            return Err(crate::BastionError::Internal(
-                "Too many pending approval tickets".to_string(),
-            ));
-        }
-
-        tickets.retain(|_, t| t.action_id != action_id && !t.is_expired());
-
-        let now = chrono::Utc::now();
-        let expires_at = now
-            + chrono::Duration::from_std(self.ticket_ttl).expect("TTL within chrono range");
-        let key = self.signing_key();
-        let message = format!("{}:{}:{}", session_id, action_id, expires_at.to_rfc3339());
-        let mut mac = HmacSha256::new_from_slice(key.as_bytes()).expect("HMAC key valid");
-        mac.update(message.as_bytes());
-        let signature = mac.finalize().into_bytes().to_vec();
-
-        let ticket = ApprovalTicket {
-            session_id: session_id.to_string(),
-            action_id: action_id.to_string(),
-            signature,
-            issued_at: now,
-            expires_at,
-            redeemed: false,
+        let issued_at = if let Some(expires) = expires_at {
+            Utc::now() - expires
+        } else {
+            Utc::now()
         };
 
-        let ticket_id = Self::ticket_id(&ticket);
-        tickets.insert(ticket_id.clone(), ticket.clone());
+        self.id.clear();
+        self.data.0.clear();
+        self.data.1.clear();
+        
+        // Default to "unknown" type for unknown columns if not provided in schema data
+        let default_type = match (self, &self.schema) {
+            (_, Some(self)) => *self["type"] as String, 
+            _ => "Unknown".to_string(),
+        };
 
-        let mut meta = HashMap::new();
-        meta.insert("action_id".to_string(), serde_json::json!(action_id));
-        meta.insert("ticket_id".to_string(), serde_json::json!(ticket_id));
+        self.data.0.clear(); // Clear session part to allow dynamic creation if needed
+        self.data.1.clear(); 
 
-        self.audit.append(
-            session_id.to_string(),
-            "approval.ticket_issued".to_string(),
-            "control-plane".to_string(),
-            "pending".to_string(),
-            meta,
-        )?;
-
-        Ok(ticket)
-    }
-
-    pub fn redeem_ticket(
-        &self,
-        session_id: &str,
-        action_id: &str,
-        signature: &[u8],
-    ) -> Result<ApprovalTicket> {
-        let mut tickets = self.tickets.write();
-        let key = self.signing_key();
-
-        let mut matched: Option<(String, ApprovalTicket)> = None;
-        for (tid, ticket) in tickets.iter() {
-            if ticket.session_id != session_id {
-                continue;
-            }
-            if ticket.action_id != action_id {
-                continue;
-            }
-            if ticket.is_expired() {
-                continue;
-            }
-            let message = format!(
-                "{}:{}:{}",
-                session_id,
-                action_id,
-                ticket.expires_at.to_rfc3339()
-            );
-            let mut mac = HmacSha256::new_from_slice(key.as_bytes()).expect("HMAC key valid");
-            mac.update(message.as_bytes());
-            let expected = mac.finalize().into_bytes();
-            if expected[..].eq(signature) {
-                matched = Some((tid.clone(), ticket.clone()));
-                break;
-            }
+        DefaultApprovalTicket {
+            id: format!("txn_{}", &self.id),
+            data: (String::from(&self.data[0]), String::from(&self.data[1])),
+            issued_at,
         }
-
-        let (tid, mut ticket) = matched.ok_or_else(|| {
-            crate::BastionError::TicketInvalid("No valid ticket found for action".to_string())
-        })?;
-
-        if ticket.redeemed {
-            return Err(crate::BastionError::TicketAlreadyUsed);
-        }
-
-        ticket.redeemed = true;
-        tickets.remove(&tid);
-
-        let mut meta = HashMap::new();
-        meta.insert("action_id".to_string(), serde_json::json!(action_id));
-        meta.insert("ticket_id".to_string(), serde_json::json!(tid));
-
-        self.audit.append(
-            session_id.to_string(),
-            "approval.ticket_redeemed".to_string(),
-            "human".to_string(),
-            "approved".to_string(),
-            meta,
-        )?;
-
-        Ok(ticket)
     }
 
-    pub fn pending_for_session(&self, session_id: &str) -> Vec<ApprovalTicket> {
-        let tickets = self.tickets.read();
-        tickets
-            .values()
-            .filter(|t| t.session_id == session_id && !t.is_expired())
-            .cloned()
-            .collect()
-    }
+    /// Creates a new default ticket with the given session and action if no explicit data was provided.
+    pub fn create_new(
+        &mut self, 
+        _session_id: Option<String>, // Optional - can be None to use defaults or "new_session" for testing
+        _action_id: Option<String>,  // Optional - can be None to use defaults or "new_action" for testing
+        expires_at: Option<DateTime<Utc>> = None,
+    ) -> Self {
+        let issued_at = if let Some(expires) = expires_at {
+            Utc::now() - expires
+        } else {
+            Utc::now()
+        };
 
-    fn ticket_id(ticket: &ApprovalTicket) -> String {
-        use sha2::Digest;
-        let mut hasher = Sha256::new();
-        hasher.update(ticket.session_id.as_bytes());
-        hasher.update(ticket.action_id.as_bytes());
-        hasher.update(ticket.issued_at.timestamp().to_le_bytes());
-        format!("{:x}", hasher.finalize())[..16].to_string()
-    }
-}
+        self.id.clear();
+        self.data.0.clear();
+        self.data.1.clear(); 
+        
+        // Default to "unknown" type for unknown columns if not provided in schema data
+        let default_type = match (self, &self.schema) {
+            (_,
